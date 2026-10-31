@@ -30,3 +30,5 @@ Test on iPhone
 3. Tap Share → Add to Home Screen.
 4. Allow location and camera/photo access when prompted.
 5. Use Take Photo while outdoors to save a GPS pin.
+
+Trail Finder update: U.S. location searches now try multiple OpenStreetMap Overpass endpoints if the primary service is unavailable. Coverage and trail names depend on OpenStreetMap data.

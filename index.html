@@ -109,23 +109,41 @@ function LMapRemove(m,l){m.removeLayer(l)}
 $('replaySelect').onchange=showReplay;$('resetReplay').onclick=()=>{clearInterval(replayTimer);replayIndex=0;showReplay()};
 $('playReplay').onclick=()=>{let id=+$('replaySelect').value,r=JSON.parse(localStorage.getItem('jayRides')||'[]').find(x=>x.id===id);if(!r||r.points.length<2)return alert('Choose a saved route with GPS points.');clearInterval(replayTimer);if(replayIndex>=r.points.length)replayIndex=0;replayTimer=setInterval(()=>{let p=r.points[replayIndex++];replayMarker.setLatLng([p.lat,p.lng]);replayMap.panTo([p.lat,p.lng]);$('replayProgress').style.width=(replayIndex/r.points.length*100)+'%';if(replayIndex>=r.points.length)clearInterval(replayTimer)},Math.max(80,12000/r.points.length))};
 let trailSearchLayer=null;
+async function fetchOverpass(query){
+ const endpoints=['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter','https://overpass.private.coffee/api/interpreter'];
+ let lastError;
+ for(const endpoint of endpoints){
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),45000);
+  try{
+   const response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'text/plain;charset=UTF-8'},body:query,signal:controller.signal});
+   if(!response.ok)throw Error('Trail data server returned '+response.status);
+   const data=await response.json();
+   if(!data||!Array.isArray(data.elements))throw Error('Trail data response was incomplete');
+   return data;
+  }catch(err){lastError=err;}
+  finally{clearTimeout(timer);}
+ }
+ throw Error('All trail map services are unavailable right now. Please try again shortly. '+(lastError?.name==='AbortError'?'The request timed out.':''));
+}
 async function searchTrails(){
  let place=$('trailPlace').value.trim();
  if(!place)return alert('Enter a U.S. town, state, ZIP code, park or trailhead.');
- $('trailResults').innerHTML='<p class="muted">Finding the location and searching U.S. trail data…</p>';
+ $('trailResults').innerHTML='<p class="muted">Finding the location and checking available U.S. trail map services…</p>';
  try{
   let geo=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q='+encodeURIComponent(place)).then(r=>{if(!r.ok)throw Error('Location search is temporarily unavailable');return r.json()});
   if(!geo.length)throw Error('No U.S. location found. Try adding the state, such as “Moab, UT”.');
   let lat=+geo[0].lat,lon=+geo[0].lon,rad=+$('trailRadius').value*1609,kind=$('trailType').value;
   map.setView([lat,lon],12);
-  let query=`[out:json][timeout:35];(way(around:${rad},${lat},${lon})["highway"~"path|track|footway|cycleway|bridleway"];relation(around:${rad},${lat},${lon})["route"~"hiking|bicycle|mtb"];);out center tags 250;`;
-  let data=await fetch('https://overpass-api.de/api/interpreter',{method:'POST',headers:{'Content-Type':'text/plain;charset=UTF-8'},body:query}).then(r=>{if(!r.ok)throw Error('The trail map service is busy. Try again in a minute.');return r.json()});
+  let filter=kind==='bicycle'?'["highway"~"path|track|cycleway"][name]':'["highway"~"path|track|footway|bridleway"][name]';
+  let routeFilter=kind==='bicycle'?'["route"~"bicycle|mtb"][name]':kind==='hiking'?'["route"="hiking"][name]':'["route"~"hiking|foot"][name]';
+  let query=`[out:json][timeout:40];(way(around:${rad},${lat},${lon})${filter};relation(around:${rad},${lat},${lon})${routeFilter};);out center tags 250;`;
+  let data=await fetchOverpass(query);
   let all=(data.elements||[]).map(e=>{let t=e.tags||{};return {e,t,name:t.name||t['official_name']||t.ref||'',lat:e.center?.lat??e.lat,lon:e.center?.lon??e.lon}}).filter(x=>x.name&&Number.isFinite(x.lat)&&Number.isFinite(x.lon));
   let matches=all.filter(x=>{let t=x.t;if(kind==='bicycle')return t.route==='bicycle'||t.route==='mtb'||t['mtb:scale']||t.bicycle==='designated'||t.bicycle==='yes'||t.highway==='cycleway'||t.highway==='path'||t.highway==='track';if(kind==='hiking')return t.route==='hiking'||t.foot==='designated'||t.foot==='yes'||['path','footway','track','bridleway'].includes(t.highway);return t.highway==='footway'||t.highway==='path'||t.foot==='designated'||t.foot==='yes'});
   let unique=[...new Map(matches.map(x=>[x.name.toLowerCase()+'|'+x.lat.toFixed(4)+'|'+x.lon.toFixed(4),x])).values()].sort((a,b)=>a.name.localeCompare(b.name)).slice(0,60);
   if(trailSearchLayer)map.removeLayer(trailSearchLayer);trailSearchLayer=L.layerGroup().addTo(map);
   L.marker([lat,lon]).addTo(trailSearchLayer).bindPopup('Search area: '+esc(place));
-  unique.forEach((x,i)=>L.marker([x.lat,x.lon]).addTo(trailSearchLayer).bindPopup('<b>'+esc(x.name)+'</b><br>'+esc(x.t.route||x.t.highway||'Mapped trail')));
+  unique.forEach(x=>L.marker([x.lat,x.lon]).addTo(trailSearchLayer).bindPopup('<b>'+esc(x.name)+'</b><br>'+esc(x.t.route||x.t.highway||'Mapped trail')));
   $('trailResults').innerHTML=unique.length?`<h4>${unique.length} named trail${unique.length===1?'':'s'} found</h4><p class="muted">Near ${esc(geo[0].display_name||place)} · within ${$('trailRadius').value} miles. Tap a result to center the map on it.</p>`+unique.map((x,i)=>{let t=x.t,kindLabel=t.route||t.highway||'Trail',diff=t.sac_scale||t['mtb:scale']||t.difficulty||'Difficulty not listed';return `<div class="trail"><b>${esc(x.name)}</b><div class="muted">${esc(kindLabel)} · ${esc(diff)}</div><button class="btn" onclick="focusTrail(${x.lat},${x.lon},${i})">Show on map</button></div>`}).join(''):'<p class="notice">No named trails matching this category were found in that radius. Try a larger search radius or a nearby park/town. OpenStreetMap coverage varies by area.</p>';
   if(!unique.length)map.setView([lat,lon],12);
  }catch(e){$('trailResults').innerHTML='<p class="notice">Trail search could not complete: '+esc(e.message)+'. Check your connection and try again.</p>'}
