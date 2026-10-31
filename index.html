@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#102018">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Jay's Adventure">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Jay's Adventure App</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{--bg:#0d1912;--panel:#17281e;--panel2:#20372a;--green:#8ee0a0;--muted:#a9bdae;--white:#f4faf5;--line:#365342}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--white);font:15px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding-bottom:82px}
+header{padding:18px 16px 12px;background:linear-gradient(130deg,#14271b,#0d1912);position:sticky;top:0;z-index:500;border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:11px}.logo{width:48px;height:48px;border-radius:15px;background:linear-gradient(145deg,#244c31,#101d15);display:grid;place-items:center;border:1px solid #5c986b;font-size:25px}.brand h1{font-size:18px;letter-spacing:.5px;margin:0}.brand small{color:var(--green);letter-spacing:1.4px;font-size:10px}
+main{max-width:900px;margin:auto;padding:14px}.modes,.seg,.stats,.actions,.musicrow,.friends{display:grid;gap:8px}.modes{grid-template-columns:repeat(3,1fr);margin-bottom:12px}.btn{border:1px solid var(--line);background:var(--panel2);color:var(--white);padding:12px;border-radius:12px;font-weight:650}.btn.active,.primary{background:#28623b;border-color:#68ad79}.btn:disabled{opacity:.45}.section{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:13px;margin:12px 0}.row{display:flex;align-items:center;justify-content:space-between;gap:10px}.muted{color:var(--muted);font-size:12px}.mapcontrols{display:flex;gap:7px;flex-wrap:wrap;margin:9px 0}.mapcontrols .btn{padding:8px 10px;font-size:12px}#map{height:330px;border-radius:13px;overflow:hidden;background:#263e30}.stats{grid-template-columns:repeat(2,1fr);margin-top:10px}.stat{background:#20372a;border-radius:12px;padding:12px}.stat label{display:block;color:var(--muted);font-size:10px;letter-spacing:1px}.stat strong{font-size:25px;display:block;margin:4px 0}.actions{grid-template-columns:repeat(3,1fr)}button{cursor:pointer}input,select{width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);background:#0f1d15;color:var(--white);font:inherit;margin:6px 0}button:focus,input:focus{outline:2px solid var(--green)}.tabs{position:fixed;bottom:0;left:0;right:0;background:#101e16;border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(5,1fr);padding:8px 4px calc(8px + env(safe-area-inset-bottom));z-index:800}.tab{border:0;background:none;color:var(--muted);font-size:11px;padding:7px 2px}.tab.active{color:var(--green)}.tab span{display:block;font-size:19px;margin-bottom:3px}.hidden{display:none!important}.listitem{padding:12px 0;border-bottom:1px solid var(--line)}.pill{font-size:10px;color:#b9f4c4;background:#244b30;border-radius:20px;padding:5px 8px}.notice{padding:10px;background:#263b2c;border-radius:10px;color:#c8dfce;font-size:12px;line-height:1.5}.bar{height:8px;background:#314739;border-radius:10px;overflow:hidden}.bar>i{display:block;height:100%;background:var(--green);width:0}.musicrow{grid-template-columns:repeat(2,1fr)}.danger{background:#512c28;border-color:#89534a}.trail{background:#20372a;border-radius:10px;padding:11px;margin:8px 0}.footer{font-size:11px;color:var(--muted);line-height:1.5}
+</style>
+</head>
+<body>
+<header><div class="brand"><div class="logo">🏔️</div><div><h1>JAY'S ADVENTURE</h1><small>EXPLORE · TRACK · DISCOVER</small></div><span class="pill" style="margin-left:auto">PROTOTYPE</span></div></header>
+<main>
+<section id="explore">
+<div class="modes">
+<button class="btn active" data-mode="Mountain Bike">🚵 Bike</button><button class="btn" data-mode="Hiking">🥾 Hike</button><button class="btn" data-mode="Walking">🚶 Walk</button>
+</div>
+<div class="section">
+<div class="row"><b>Explore your map</b><span class="muted" id="gpsState">GPS not started</span></div>
+<div class="mapcontrols"><button class="btn active" id="terrainBtn">Terrain</button><button class="btn" id="satBtn">Satellite</button><button class="btn" id="locateBtn">◎ My location</button></div>
+<div id="map"></div>
+<div class="stats">
+<div class="stat"><label>CURRENT SPEED</label><strong id="speed">—</strong><span class="muted">MPH</span></div>
+<div class="stat"><label>DISTANCE</label><strong id="distance">0.00</strong><span class="muted">miles</span></div>
+<div class="stat"><label>ELAPSED TIME</label><strong id="elapsed">00:00</strong><span class="muted">recording time</span></div>
+<div class="stat"><label>MAX SPEED</label><strong id="maxSpeed">—</strong><span class="muted">MPH</span></div>
+</div>
+<div class="actions" style="margin-top:12px"><button class="btn primary" id="startBtn">Start</button><button class="btn" id="pauseBtn" disabled>Pause</button><button class="btn danger" id="finishBtn" disabled>Finish</button></div>
+
+<div class="section" id="spotifyPanel">
+  <div class="row"><b>🟢 Spotify Premium</b><span class="pill">MUSIC CONTROLS</span></div>
+  <p class="muted">Keep your soundtrack close while you track your adventure.</p>
+  <div class="row" style="gap:12px;align-items:center;margin:12px 0">
+    <div style="width:54px;height:54px;border-radius:12px;background:#20372a;display:grid;place-items:center;font-size:26px">♫</div>
+    <div style="min-width:0;flex:1"><b id="spotifyTrack">Connect Spotify to get started</b><div class="muted" id="spotifyArtist">Your currently playing track will appear here.</div></div>
+  </div>
+  <div class="musicrow">
+    <button class="btn" id="spotifyPrev" disabled>⏮ Previous</button>
+    <button class="btn" id="spotifyPlay" disabled>▶ Play / Pause</button>
+    <button class="btn" id="spotifyNext" disabled>⏭ Next</button>
+    <button class="btn primary" id="spotifyConnect">Connect Spotify</button>
+  </div>
+  <p class="notice" id="spotifyStatus" style="margin-top:12px">Preview only: Spotify sign-in and playback controls are not connected yet. A Spotify Developer app and secure OAuth setup are required before these controls can operate.</p>
+</div>
+
+<p class="muted" id="recordMsg">Start an adventure to record GPS points. Keep this page open while recording.</p>
+</div>
+<div class="section"><b>Find trails near you or somewhere else</b><p class="muted">Search OpenStreetMap trail data around a place. Coverage and difficulty details vary by area.</p><input id="trailPlace" placeholder="Town, park, mountain or trailhead"><div class="row"><select id="trailType"><option value="bicycle">Mountain biking</option><option value="hiking">Hiking</option><option value="walking">Walking</option></select><select id="trailRadius"><option value="10">10 miles</option><option value="25" selected>25 miles</option><option value="50">50 miles</option></select></div><button class="btn primary" style="width:100%" id="searchTrails">Search trails</button><div id="trailResults"></div></div>
+</section>
+<section id="saved" class="hidden"><div class="section"><b>Saved adventures</b><p class="muted">Routes are stored in this browser on this device.</p><div id="savedList"></div></div></section>
+<section id="replay" class="hidden"><div class="section"><b>Adventure replay</b><p class="muted">Choose a saved route to animate its recorded GPS points on the map.</p><select id="replaySelect"><option value="">Choose a saved adventure</option></select><div class="row"><button class="btn primary" id="playReplay">▶ Play</button><button class="btn" id="resetReplay">↺ Reset</button></div><div class="bar" style="margin:14px 0"><i id="replayProgress"></i></div><div class="muted" id="replayInfo">No replay selected.</div></div><div class="section"><b>Replay map</b><div id="replayMap" style="height:300px;border-radius:12px;background:#263e30"></div></div></section>
+<section id="music" class="hidden"><div class="section"><b>Music hub</b><p class="muted">Choose a service. This prototype provides quick links and playback hand-off; it does not embed or control third-party subscriptions.</p><div class="musicrow"><button class="btn" data-music="Spotify">🟢 Spotify</button><button class="btn" data-music="Apple Music">🍎 Apple Music</button><button class="btn" data-music="Amazon Music">🎵 Amazon Music</button><button class="btn" data-music="YouTube Music">▶ YouTube Music</button><button class="btn" data-music="Pandora">🔵 Pandora</button><button class="btn" data-music="Other">＋ Other player</button></div><p class="notice" id="musicMsg">Select a music service to open it. Playback depends on the service's own app and permissions.</p></div></section>
+<section id="crew" class="hidden"><div class="section"><b>Private Adventure Crew</b><p class="muted">Plan together and share routes privately. Live group location is a future server-backed feature and is not active in this prototype.</p><input id="friendName" placeholder="Friend's name"><input id="friendContact" placeholder="Email or phone (for your own notes)"><button class="btn primary" id="addFriend" style="width:100%">＋ Add friend to invite list</button><div id="friendList"></div><div class="notice" style="margin-top:12px">Privacy: no location is shared by this prototype. Real invitations need a secure account and backend service.</div></div></section>
+</main>
+<nav class="tabs"><button class="tab active" data-tab="explore"><span>🧭</span>Explore</button><button class="tab" data-tab="saved"><span>🔖</span>Saved</button><button class="tab" data-tab="replay"><span>▶️</span>Replay</button><button class="tab" data-tab="music"><span>🎵</span>Music</button><button class="tab" data-tab="crew"><span>👥</span>Crew</button></nav>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+let mode='Mountain Bike',map,replayMap,marker,trackLine,replayMarker,watchId=null,recording=false,paused=false,startTime=0,elapsedBefore=0,lastPoint=null,totalMeters=0,maxMph=0,points=[],timer=null,replayTimer=null,replayIndex=0;
+const $=id=>document.getElementById(id), miles=m=>m/1609.344;
+function initMap(id){let m=L.map(id).setView([42.84,-71.09],11);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(m);return m}
+if(window.L){map=initMap('map');replayMap=initMap('replayMap');trackLine=L.polyline([],{color:'#8ee0a0',weight:5}).addTo(map)}
+function setLayer(url){if(!map)return;map.eachLayer(l=>{if(l instanceof L.TileLayer)map.removeLayer(l)});L.tileLayer(url,{maxZoom:19,attribution:'Map data © OpenStreetMap contributors'}).addTo(map)}
+$('terrainBtn').onclick=()=>{setLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');$('terrainBtn').classList.add('active');$('satBtn').classList.remove('active')};
+$('satBtn').onclick=()=>{setLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}');$('satBtn').classList.add('active');$('terrainBtn').classList.remove('active')};
+document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{mode=b.dataset.mode;document.querySelectorAll('[data-mode]').forEach(x=>x.classList.toggle('active',x===b))});
+function fmt(s){let m=Math.floor(s/60),sec=Math.floor(s%60);return String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0')}
+function updateStats(mph){$('speed').textContent=mph==null?'—':mph.toFixed(1);$('distance').textContent=miles(totalMeters).toFixed(2);$('maxSpeed').textContent=maxMph?maxMph.toFixed(1):'—';$('elapsed').textContent=fmt(elapsedBefore+(recording&&!paused?(Date.now()-startTime)/1000:0))}
+function hav(a,b){let R=6371000,p=Math.PI/180,d1=(b.lat-a.lat)*p,d2=(b.lng-a.lng)*p;let x=Math.sin(d1/2)**2+Math.cos(a.lat*p)*Math.cos(b.lat*p)*Math.sin(d2/2)**2;return 2*R*Math.asin(Math.sqrt(x))}
+function onPosition(pos){let p={lat:pos.coords.latitude,lng:pos.coords.longitude,t:Date.now(),alt:pos.coords.altitude};let mph=pos.coords.speed!=null?pos.coords.speed*2.23694:null;if(lastPoint){let d=hav(lastPoint,p);if(d<250)totalMeters+=d;if(mph==null){let dt=(p.t-lastPoint.t)/1000;if(dt>0)mph=(d/dt)*2.23694}}if(mph!=null&&mph<80)maxMph=Math.max(maxMph,mph);points.push(p);lastPoint=p;trackLine.addLatLng([p.lat,p.lng]);if(!marker)marker=L.circleMarker([p.lat,p.lng],{radius:8,color:'#fff',fillColor:'#38d66c',fillOpacity:1}).addTo(map);else marker.setLatLng([p.lat,p.lng]);map.panTo([p.lat,p.lng]);$('gpsState').textContent='GPS active';updateStats(mph)}
+$('locateBtn').onclick=()=>{if(!navigator.geolocation)return alert('GPS is not supported by this browser.');navigator.geolocation.getCurrentPosition(p=>{let ll=[p.coords.latitude,p.coords.longitude];map.setView(ll,15);L.circleMarker(ll,{radius:8,color:'#fff',fillColor:'#35d66c',fillOpacity:1}).addTo(map).bindPopup('Your location').openPopup();$('gpsState').textContent='Location found'},e=>alert('Could not get location: '+e.message),{enableHighAccuracy:true,timeout:15000})};
+$('startBtn').onclick=()=>{if(!navigator.geolocation){alert('This browser does not support GPS.');return}if(!window.isSecureContext){alert('GPS requires a secure HTTPS website. Upload this prototype to an HTTPS host to test GPS on iPhone.');return}recording=true;paused=false;startTime=Date.now();$('startBtn').disabled=true;$('pauseBtn').disabled=false;$('finishBtn').disabled=false;$('recordMsg').textContent='Recording GPS. Keep the screen awake and this page open.';watchId=navigator.geolocation.watchPosition(onPosition,e=>{$('gpsState').textContent='GPS error';$('recordMsg').textContent=e.message},{enableHighAccuracy:true,maximumAge:1000,timeout:15000});timer=setInterval(()=>updateStats(null),1000)};
+$('pauseBtn').onclick=()=>{if(!recording)return;if(!paused){elapsedBefore+=(Date.now()-startTime)/1000;paused=true;navigator.geolocation.clearWatch(watchId);watchId=null;$('pauseBtn').textContent='Resume'}else{paused=false;startTime=Date.now();watchId=navigator.geolocation.watchPosition(onPosition,e=>$('recordMsg').textContent=e.message,{enableHighAccuracy:true,maximumAge:1000});$('pauseBtn').textContent='Pause'}};
+$('finishBtn').onclick=()=>{if(watchId!==null)navigator.geolocation.clearWatch(watchId);clearInterval(timer);recording=false;paused=false;let duration=elapsedBefore+(Date.now()-startTime)/1000;let ride={id:Date.now(),name:mode+' adventure · '+new Date().toLocaleDateString(),mode,points,distance:miles(totalMeters),duration,maxMph};if(points.length>1){let rides=JSON.parse(localStorage.getItem('jayRides')||'[]');rides.unshift(ride);localStorage.setItem('jayRides',JSON.stringify(rides));$('recordMsg').textContent='Adventure saved on this device.'}else $('recordMsg').textContent='No GPS points recorded; nothing was saved.';points=[];lastPoint=null;totalMeters=0;elapsedBefore=0;maxMph=0;trackLine.setLatLngs([]);$('startBtn').disabled=false;$('pauseBtn').disabled=true;$('finishBtn').disabled=true;$('pauseBtn').textContent='Pause';updateStats(null);renderSaved()};
+function renderSaved(){let rides=JSON.parse(localStorage.getItem('jayRides')||'[]');$('savedList').innerHTML=rides.length?rides.map(r=>`<div class="listitem"><b>${esc(r.name)}</b><div class="muted">${r.distance.toFixed(2)} mi · ${fmt(r.duration)} · ${r.points.length} GPS points</div><button class="btn" onclick="chooseReplay(${r.id})">Replay</button> <button class="btn danger" onclick="deleteRide(${r.id})">Delete</button></div>`).join(''):'<p class="muted">No saved adventures yet. Record a ride to see it here.</p>';$('replaySelect').innerHTML='<option value="">Choose a saved adventure</option>'+rides.map(r=>`<option value="${r.id}">${esc(r.name)}</option>`).join('')}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+window.chooseReplay=id=>{$('replaySelect').value=id;showReplay()};
+window.deleteRide=id=>{let a=JSON.parse(localStorage.getItem('jayRides')||'[]').filter(x=>x.id!==id);localStorage.setItem('jayRides',JSON.stringify(a));renderSaved()};
+function showReplay(){let id=+$('replaySelect').value,r=JSON.parse(localStorage.getItem('jayRides')||'[]').find(x=>x.id===id);if(!r)return;replayMap.eachLayer(l=>{if(l instanceof L.Polyline||l instanceof L.CircleMarker)LMapRemove(replayMap,l)});let coords=r.points.map(p=>[p.lat,p.lng]);if(coords.length){L.polyline(coords,{color:'#8ee0a0',weight:4}).addTo(replayMap);replayMap.fitBounds(coords,{padding:[20,20]});replayMarker=L.circleMarker(coords[0],{radius:8,color:'#fff',fillColor:'#f5c84c',fillOpacity:1}).addTo(replayMap)}replayIndex=0;$('replayProgress').style.width='0%';$('replayInfo').textContent=`${r.name} · ${r.distance.toFixed(2)} miles · ${fmt(r.duration)}`}
+function LMapRemove(m,l){m.removeLayer(l)}
+$('replaySelect').onchange=showReplay;$('resetReplay').onclick=()=>{clearInterval(replayTimer);replayIndex=0;showReplay()};
+$('playReplay').onclick=()=>{let id=+$('replaySelect').value,r=JSON.parse(localStorage.getItem('jayRides')||'[]').find(x=>x.id===id);if(!r||r.points.length<2)return alert('Choose a saved route with GPS points.');clearInterval(replayTimer);if(replayIndex>=r.points.length)replayIndex=0;replayTimer=setInterval(()=>{let p=r.points[replayIndex++];replayMarker.setLatLng([p.lat,p.lng]);replayMap.panTo([p.lat,p.lng]);$('replayProgress').style.width=(replayIndex/r.points.length*100)+'%';if(replayIndex>=r.points.length)clearInterval(replayTimer)},Math.max(80,12000/r.points.length))};
+async function searchTrails(){let place=$('trailPlace').value.trim();if(!place)return alert('Enter a town, park or trailhead.');$('trailResults').innerHTML='<p class="muted">Searching OpenStreetMap…</p>';try{let geo=await fetch('https://nominatim.openstreetmap.org/search?format=json&q='+encodeURIComponent(place)).then(r=>r.json());if(!geo.length)throw Error('Location not found');let lat=+geo[0].lat,lon=+geo[0].lon,rad=+$('trailRadius').value*1609,kind=$('trailType').value;map.setView([lat,lon],12);let query=`[out:json][timeout:25];(way(around:${rad},${lat},${lon})["highway"~"path|track|footway|cycleway"];relation(around:${rad},${lat},${lon})["route"~"hiking|bicycle"]););out center tags 35;`;let data=await fetch('https://overpass-api.de/api/interpreter',{method:'POST',body:query}).then(r=>r.json());let items=data.elements||[];$('trailResults').innerHTML=items.length?'<h4>Trail and path candidates</h4>'+items.slice(0,20).map((e,i)=>{let t=e.tags||{},name=t.name||t['ref']||'Unnamed mapped path',diff=t.sac_scale||t['mtb:scale']||t.difficulty||'Difficulty not listed';return `<div class="trail"><b>${esc(name)}</b><div class="muted">${esc(t.highway||t.route||'Trail')} · ${esc(diff)}</div><button class="btn" onclick="focusTrail(${e.center?.lat||lat},${e.center?.lon||lon})">Show on map</button></div>`}).join(''):'<p class="muted">No mapped trail candidates found in this search area.</p>';L.marker([lat,lon]).addTo(map).bindPopup(esc(place)).openPopup()}catch(e){$('trailResults').innerHTML='<p class="notice">Trail search could not complete: '+esc(e.message)+'. Check your connection and try again.</p>'}}
+window.focusTrail=(lat,lon)=>map.setView([lat,lon],15);$('searchTrails').onclick=searchTrails;
+document.querySelectorAll('[data-music]').forEach(b=>b.onclick=()=>{let n=b.dataset.music,urls={'Spotify':'https://open.spotify.com/','Apple Music':'https://music.apple.com/','Amazon Music':'https://music.amazon.com/','YouTube Music':'https://music.youtube.com/','Pandora':'https://www.pandora.com/'};$('musicMsg').textContent=n+' selected. Opening its service…';window.open(urls[n]||'https://www.google.com/','_blank')});
+$('addFriend').onclick=()=>{let n=$('friendName').value.trim(),c=$('friendContact').value.trim();if(!n||!c)return alert("Add a friend name and email or phone.");let a=JSON.parse(localStorage.getItem('jayFriends')||'[]');a.push({n,c});localStorage.setItem('jayFriends',JSON.stringify(a));$('friendName').value='';$('friendContact').value='';renderFriends()};
+function renderFriends(){let a=JSON.parse(localStorage.getItem('jayFriends')||'[]');$('friendList').innerHTML=a.map(x=>`<div class="listitem"><b>${esc(x.n)}</b><div class="muted">${esc(x.c)} · invitation not sent</div></div>`).join('')||'<p class="muted">Your invite list is empty.</p>'}
+document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('active',x===b));['explore','saved','replay','music','crew'].forEach(id=>$(id).classList.toggle('hidden',id!==b.dataset.tab));if(b.dataset.tab==='saved')renderSaved();if(b.dataset.tab==='replay')renderSaved();if(b.dataset.tab==='crew')renderFriends();setTimeout(()=>{map?.invalidateSize();replayMap?.invalidateSize()},100)});
+
+$('spotifyConnect').onclick=()=>{
+  $('spotifyStatus').textContent='Spotify connection setup is not configured yet. Next step: register Jay’s Adventure App in the Spotify Developer Dashboard and configure secure OAuth (PKCE) on the hosted app.';
+  $('spotifyTrack').textContent='Spotify not connected';
+  $('spotifyArtist').textContent='Complete Spotify authorization setup to show track details.';
+};
+['spotifyPrev','spotifyPlay','spotifyNext'].forEach(id=>$(id).onclick=()=>{$('spotifyStatus').textContent='Playback controls will work after the real Spotify Premium connection is implemented.'});
+
+renderSaved();renderFriends();
+if('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('./sw.js').catch(()=>{});
+</script>
+</body></html>
