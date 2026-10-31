@@ -56,7 +56,7 @@ main{max-width:900px;margin:auto;padding:14px}.modes,.seg,.stats,.actions,.frien
 
 <p class="muted" id="recordMsg">Start an adventure to record GPS points. Keep this page open while recording.</p>
 </div>
-<div class="section"><b>🇺🇸 Find trails across the USA</b><p class="muted">Search named mountain-bike and hiking trails by town, state, ZIP code, park or trailhead. Trail coverage and details vary by location.</p><input id="trailPlace" placeholder="Example: Moab, UT or Acadia National Park"><div class="row"><select id="trailType"><option value="bicycle">🚵 Mountain biking</option><option value="hiking">🥾 Hiking</option><option value="walking">🚶 Walking paths</option></select><select id="trailRadius"><option value="5">5 miles</option><option value="10">10 miles</option><option value="25" selected>25 miles</option><option value="50">50 miles</option></select></div><button class="btn primary" style="width:100%" id="searchTrails">Search U.S. trails</button><div id="trailResults"></div></div>
+<div class="section"><b>🇺🇸 Trails on your map</b><p class="muted">Show mapped trail routes directly on the map. Search a U.S. town, ZIP code or park, or use your current GPS location to find trails around you.</p><input id="trailPlace" placeholder="Example: Moab, UT or Acadia National Park"><div class="row"><select id="trailType"><option value="bicycle">🚵 Mountain biking</option><option value="hiking">🥾 Hiking</option><option value="walking">🚶 Walking paths</option></select><select id="trailRadius"><option value="5">5 miles</option><option value="10">10 miles</option><option value="25" selected>25 miles</option><option value="50">50 miles</option></select></div><button class="btn primary" style="width:100%" id="searchTrails">Search this area</button><button class="btn" style="width:100%;margin-top:8px" id="nearMeTrails">◎ Find trails near my current location</button><div id="trailResults" class="muted" style="margin-top:9px">Trail routes will appear directly on the map when available. Your GPS location is used only when you tap the nearby button.</div></div>
 </section>
 <section id="saved" class="hidden"><div class="section"><div class="row"><b>📁 My Saved Adventures</b><span class="pill" id="savedCount">0 RIDES</span></div><p class="muted">Your completed rides, hikes and walks are kept here on this iPhone. Choose a folder to filter your adventures.</p><div class="saved-filters"><button class="btn active" data-saved-filter="All">All</button><button class="btn" data-saved-filter="Mountain Bike">🚵 Bike</button><button class="btn" data-saved-filter="Hiking">🥾 Hike</button><button class="btn" data-saved-filter="Walking">🚶 Walk</button></div><div id="savedList"></div></div></section>
 <section id="replay" class="hidden"><div class="section"><b>Adventure replay</b><p class="muted">Choose a saved route to animate its recorded GPS points on the map.</p><select id="replaySelect"><option value="">Choose a saved adventure</option></select><div class="row"><button class="btn primary" id="playReplay">▶ Play</button><button class="btn" id="resetReplay">↺ Reset</button></div><div class="bar" style="margin:14px 0"><i id="replayProgress"></i></div><div class="muted" id="replayInfo">No replay selected.</div></div><div class="section"><b>Replay map</b><div id="replayMap" style="height:300px;border-radius:12px;background:#263e30"></div></div></section>
@@ -114,41 +114,42 @@ async function fetchOverpass(query){
  let lastError;
  for(const endpoint of endpoints){
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),45000);
-  try{
-   const response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'text/plain;charset=UTF-8'},body:query,signal:controller.signal});
-   if(!response.ok)throw Error('Trail data server returned '+response.status);
-   const data=await response.json();
-   if(!data||!Array.isArray(data.elements))throw Error('Trail data response was incomplete');
-   return data;
-  }catch(err){lastError=err;}
-  finally{clearTimeout(timer);}
+  try{const response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'text/plain;charset=UTF-8'},body:query,signal:controller.signal});if(!response.ok)throw Error('Trail data server returned '+response.status);const data=await response.json();if(!data||!Array.isArray(data.elements))throw Error('Trail data response was incomplete');return data;}
+  catch(err){lastError=err;}finally{clearTimeout(timer);}
  }
- throw Error('All trail map services are unavailable right now. Please try again shortly. '+(lastError?.name==='AbortError'?'The request timed out.':''));
+ throw Error('All trail map services are unavailable right now. '+(lastError?.name==='AbortError'?'The request timed out.':'Please try again shortly.'));
 }
-async function searchTrails(){
+async function searchTrails(current=null){
  let place=$('trailPlace').value.trim();
- if(!place)return alert('Enter a U.S. town, state, ZIP code, park or trailhead.');
- $('trailResults').innerHTML='<p class="muted">Finding the location and checking available U.S. trail map services…</p>';
+ if(!current&&!place)return alert('Enter a U.S. town, state, ZIP code or park, or use Find trails near my current location.');
+ $('trailResults').textContent='Loading nearby mapped trail routes…';
  try{
-  let geo=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q='+encodeURIComponent(place)).then(r=>{if(!r.ok)throw Error('Location search is temporarily unavailable');return r.json()});
-  if(!geo.length)throw Error('No U.S. location found. Try adding the state, such as “Moab, UT”.');
-  let lat=+geo[0].lat,lon=+geo[0].lon,rad=+$('trailRadius').value*1609,kind=$('trailType').value;
+  let lat,lon,placeLabel;
+  if(current){lat=current.lat;lon=current.lon;placeLabel='your current location';}
+  else {let geo=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q='+encodeURIComponent(place)).then(r=>{if(!r.ok)throw Error('Location search is temporarily unavailable');return r.json()});if(!geo.length)throw Error('No U.S. location found. Try adding the state, such as “Moab, UT”.');lat=+geo[0].lat;lon=+geo[0].lon;placeLabel=geo[0].display_name||place;}
+  let rad=+$('trailRadius').value*1609,kind=$('trailType').value;
   map.setView([lat,lon],12);
-  let filter=kind==='bicycle'?'["highway"~"path|track|cycleway"][name]':'["highway"~"path|track|footway|bridleway"][name]';
-  let routeFilter=kind==='bicycle'?'["route"~"bicycle|mtb"][name]':kind==='hiking'?'["route"="hiking"][name]':'["route"~"hiking|foot"][name]';
-  let query=`[out:json][timeout:40];(way(around:${rad},${lat},${lon})${filter};relation(around:${rad},${lat},${lon})${routeFilter};);out center tags 250;`;
+  const wayFilter=kind==='bicycle'?'["highway"~"path|track|cycleway"][name]':'["highway"~"path|track|footway|bridleway"][name]';
+  const routeFilter=kind==='bicycle'?'["route"~"bicycle|mtb"][name]':kind==='hiking'?'["route"="hiking"][name]':'["route"~"hiking|foot"][name]';
+  let query=`[out:json][timeout:40];(way(around:${rad},${lat},${lon})${wayFilter};relation(around:${rad},${lat},${lon})${routeFilter};);out geom tags 250;`;
   let data=await fetchOverpass(query);
-  let all=(data.elements||[]).map(e=>{let t=e.tags||{};return {e,t,name:t.name||t['official_name']||t.ref||'',lat:e.center?.lat??e.lat,lon:e.center?.lon??e.lon}}).filter(x=>x.name&&Number.isFinite(x.lat)&&Number.isFinite(x.lon));
-  let matches=all.filter(x=>{let t=x.t;if(kind==='bicycle')return t.route==='bicycle'||t.route==='mtb'||t['mtb:scale']||t.bicycle==='designated'||t.bicycle==='yes'||t.highway==='cycleway'||t.highway==='path'||t.highway==='track';if(kind==='hiking')return t.route==='hiking'||t.foot==='designated'||t.foot==='yes'||['path','footway','track','bridleway'].includes(t.highway);return t.highway==='footway'||t.highway==='path'||t.foot==='designated'||t.foot==='yes'});
-  let unique=[...new Map(matches.map(x=>[x.name.toLowerCase()+'|'+x.lat.toFixed(4)+'|'+x.lon.toFixed(4),x])).values()].sort((a,b)=>a.name.localeCompare(b.name)).slice(0,60);
+  let features=(data.elements||[]).map(e=>{let t=e.tags||{},g=e.geometry||[];return {id:e.id,type:e.type,t,name:t.name||t['official_name']||t.ref||'',coords:g.map(p=>[p.lat,p.lon]).filter(p=>Number.isFinite(p[0])&&Number.isFinite(p[1])),center:e.center? [e.center.lat,e.center.lon]:null};}).filter(x=>x.name&&(x.coords.length>1||x.center));
+  let unique=[...new Map(features.map(x=>[x.name.toLowerCase()+'|'+(x.coords[0]?.join(',')||x.center?.join(',')),x])).values()].slice(0,250);
   if(trailSearchLayer)map.removeLayer(trailSearchLayer);trailSearchLayer=L.layerGroup().addTo(map);
-  L.marker([lat,lon]).addTo(trailSearchLayer).bindPopup('Search area: '+esc(place));
-  unique.forEach(x=>L.marker([x.lat,x.lon]).addTo(trailSearchLayer).bindPopup('<b>'+esc(x.name)+'</b><br>'+esc(x.t.route||x.t.highway||'Mapped trail')));
-  $('trailResults').innerHTML=unique.length?`<h4>${unique.length} named trail${unique.length===1?'':'s'} found</h4><p class="muted">Near ${esc(geo[0].display_name||place)} · within ${$('trailRadius').value} miles. Tap a result to center the map on it.</p>`+unique.map((x,i)=>{let t=x.t,kindLabel=t.route||t.highway||'Trail',diff=t.sac_scale||t['mtb:scale']||t.difficulty||'Difficulty not listed';return `<div class="trail"><b>${esc(x.name)}</b><div class="muted">${esc(kindLabel)} · ${esc(diff)}</div><button class="btn" onclick="focusTrail(${x.lat},${x.lon},${i})">Show on map</button></div>`}).join(''):'<p class="notice">No named trails matching this category were found in that radius. Try a larger search radius or a nearby park/town. OpenStreetMap coverage varies by area.</p>';
-  if(!unique.length)map.setView([lat,lon],12);
- }catch(e){$('trailResults').innerHTML='<p class="notice">Trail search could not complete: '+esc(e.message)+'. Check your connection and try again.</p>'}
+  let bounds=[];
+  L.circleMarker([lat,lon],{radius:8,color:'#fff',weight:2,fillColor:'#35d66d',fillOpacity:1}).addTo(trailSearchLayer).bindPopup(current?'Your current location':'Search area: '+esc(place));
+  bounds.push([lat,lon]);
+  unique.forEach(x=>{
+   let color=kind==='bicycle'?'#ffbd59':kind==='hiking'?'#75d99a':'#70c9ff';
+   if(x.coords.length>1){L.polyline(x.coords,{color,weight:5,opacity:.9}).addTo(trailSearchLayer).bindPopup('<b>'+esc(x.name)+'</b><br>'+esc(x.t.route||x.t.highway||'Mapped trail'));bounds.push(...x.coords);}
+   else if(x.center){L.marker(x.center).addTo(trailSearchLayer).bindPopup('<b>'+esc(x.name)+'</b><br>'+esc(x.t.route||'Mapped trail'));bounds.push(x.center);}
+  });
+  if(bounds.length>1)map.fitBounds(bounds,{padding:[24,24],maxZoom:14});else map.setView([lat,lon],13);
+  $('trailResults').textContent=unique.length?`${unique.length} mapped trail feature${unique.length===1?'':'s'} shown on the map near ${placeLabel} · within ${$('trailRadius').value} miles. Tap a colored trail line or marker for its name.`:`No named trail routes found in this area. Try a larger radius or another nearby park. OpenStreetMap coverage varies.`;
+ }catch(e){$('trailResults').textContent='Trail search could not complete: '+e.message+' Check your connection and try again.';}
 }
-window.focusTrail=(lat,lon)=>{map.setView([lat,lon],15);if(trailSearchLayer)trailSearchLayer.eachLayer(m=>{let p=m.getLatLng();if(Math.abs(p.lat-lat)<0.00001&&Math.abs(p.lng-lon)<0.00001)m.openPopup()})};$('searchTrails').onclick=searchTrails;
+$('searchTrails').onclick=()=>searchTrails();
+$('nearMeTrails').onclick=()=>{if(!navigator.geolocation)return alert('GPS is not supported by this browser.');$('trailResults').textContent='Getting your current location…';navigator.geolocation.getCurrentPosition(p=>{let c={lat:p.coords.latitude,lon:p.coords.longitude};$('trailPlace').value='';$('gpsState').textContent='Location found';searchTrails(c);},e=>{$('trailResults').textContent='Could not get your location: '+e.message+' Check that location permission is allowed for this website.';},{enableHighAccuracy:true,timeout:20000,maximumAge:60000});};
 $('addFriend').onclick=()=>{let n=$('friendName').value.trim(),c=$('friendContact').value.trim();if(!n||!c)return alert("Add a friend name and email or phone.");let a=JSON.parse(localStorage.getItem('jayFriends')||'[]');a.push({n,c});localStorage.setItem('jayFriends',JSON.stringify(a));$('friendName').value='';$('friendContact').value='';renderFriends()};
 function renderFriends(){let a=JSON.parse(localStorage.getItem('jayFriends')||'[]');$('friendList').innerHTML=a.map(x=>`<div class="listitem"><b>${esc(x.n)}</b><div class="muted">${esc(x.c)} · invitation not sent</div></div>`).join('')||'<p class="muted">Your invite list is empty.</p>'}
 document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('active',x===b));['explore','saved','replay','crew'].forEach(id=>$(id).classList.toggle('hidden',id!==b.dataset.tab));if(b.dataset.tab==='saved')renderSaved();if(b.dataset.tab==='replay')renderSaved();if(b.dataset.tab==='crew')renderFriends();setTimeout(()=>{map?.invalidateSize();replayMap?.invalidateSize()},100)});
